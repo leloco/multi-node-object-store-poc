@@ -1,0 +1,122 @@
+networks:
+  client-net:
+    driver: bridge
+    name: client-net
+    ipam:
+      config:
+        - subnet: 172.28.10.0/24
+  cluster-net:
+    driver: bridge
+    name: cluster-net
+    ipam:
+      config:
+        - subnet: 172.28.20.0/24
+  management-net:
+    driver: bridge
+    name: management-net
+    ipam:
+      config:
+        - subnet: 172.28.30.0/24
+
+volumes:
+  master-data:
+    name: master-data
+  vol-0-data:
+    name: vol-0-data
+  vol-1-data:
+    name: vol-1-data
+  vol-2-data:
+    name: vol-2-data
+
+x-volume-defaults: &volume-defaults
+  image: chrislusf/seaweedfs@sha256:${SEAWEED_VERSION}
+  networks:
+    - cluster-net
+  depends_on:
+    - sw-master
+  restart: unless-stopped
+
+services:
+  sw-master:
+    image: chrislusf/seaweedfs@sha256:${SEAWEED_VERSION}
+    container_name: sw-master
+    command: "master -port=9333 -ip=sw-master -defaultReplication=002"
+    networks:
+      - cluster-net
+      - management-net
+    volumes:
+      - master-data:/data
+    restart: unless-stopped
+
+  sw-volume-0:
+    <<: *volume-defaults
+    command: "volume -dir=/data -max=50 -mserver=sw-master:9333 -port=8080 -ip=sw-volume-0"
+    container_name: sw-volume-0
+    volumes:
+      - vol-0-data:/data
+
+  sw-volume-1:
+    <<: *volume-defaults
+    command: "volume -dir=/data -max=50 -mserver=sw-master:9333 -port=8080 -ip=sw-volume-1"
+    container_name: sw-volume-1
+    volumes:
+      - vol-1-data:/data
+
+  sw-volume-2:
+    <<: *volume-defaults
+    command: "volume -dir=/data -max=50 -mserver=sw-master:9333 -port=8080 -ip=sw-volume-2"
+    container_name: sw-volume-2
+    volumes:
+      - vol-2-data:/data
+
+  sw-filer:
+    image: chrislusf/seaweedfs@sha256:${SEAWEED_VERSION}
+    container_name: sw-filer
+    command: "filer -port=8888 -ip=sw-filer -master=sw-master:9333"
+    networks:
+      - cluster-net
+      - management-net
+    depends_on:
+      - sw-master
+      - sw-volume-0
+      - sw-volume-1
+      - sw-volume-2
+    restart: unless-stopped
+
+  sw-gateway:
+    image: chrislusf/seaweedfs@sha256:${SEAWEED_VERSION}
+    container_name: sw-gateway
+    command: "s3 -port=8333 -filer=sw-filer:8888"
+    networks:
+      - client-net
+      - cluster-net
+    ports:
+      - "8333:8333"
+    depends_on:
+      - sw-filer
+    restart: unless-stopped
+
+  s3-cli:
+    image: amazon/aws-cli@sha256:${AWS_CLI_VERSION}
+    container_name: s3-cli
+    entrypoint: ["tail", "-f", "/dev/null"]
+    environment:
+      - AWS_ACCESS_KEY_ID=dummy_key
+      - AWS_SECRET_ACCESS_KEY=dummy_secret
+      - AWS_DEFAULT_REGION=us-east-1
+    networks:
+      - client-net
+    depends_on:
+      - sw-gateway
+    restart: unless-stopped
+
+  sw-client:
+    image: chrislusf/seaweedfs@sha256:${SEAWEED_VERSION}
+    container_name: sw-client
+    entrypoint: ["tail", "-f", "/dev/null"]
+    networks:
+      - management-net
+      - cluster-net
+    depends_on:
+      - sw-master
+    restart: unless-stopped
