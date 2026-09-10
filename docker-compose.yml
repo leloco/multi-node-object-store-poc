@@ -27,6 +27,8 @@ volumes:
     name: vol-1-data
   vol-2-data:
     name: vol-2-data
+  filer-data:
+    name: filer-data
 
 x-volume-defaults: &volume-defaults
   image: chrislusf/seaweedfs@sha256:${SEAWEED_VERSION}
@@ -76,6 +78,8 @@ services:
     networks:
       - cluster-net
       - management-net
+    volumes:
+      - filer-data:/data/filerldb2
     depends_on:
       - sw-master
       - sw-volume-0
@@ -110,9 +114,9 @@ services:
       - sw-gateway
     restart: unless-stopped
 
-  sw-client:
-    image: chrislusf/seaweedfs@sha256:${SEAWEED_VERSION}
-    container_name: sw-client
+  admin-bastion:
+    image: nicolaka/netshoot@sha256:${NETSHOOT_VERSION}
+    container_name: admin-bastion
     entrypoint: ["tail", "-f", "/dev/null"]
     networks:
       - management-net
