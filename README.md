@@ -44,3 +44,7 @@ make test-network-isolation
 ```bash
 make destroy
 ```
+
+## Architecture
+
+For a deep dive into the core design decisions, trade-offs, and the path to production, please check out the `ARCHITECTURE.md` and the accompanying `diagram.svg` (or `diagram.png`).
